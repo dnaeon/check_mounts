@@ -1,12 +1,12 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
-# Vim : ts=8; sts=3;
 ########################################################## 
 #    Filename : check_mounts.sh			         #
 #     Version : 0.02				         #
 # Description : Checks for missing mounts on the present #
 #	        vservers on a GNU/Linux system		 #
 #							 #
+#	  Vim : ts=8; sts=3;				 #
 ##########################################################
 
 # Nagios exit codes
@@ -15,15 +15,15 @@ E_WARN=1
 E_CRIT=2
 E_UNKN=3
 
-AWK=/usr/bin/awk
-CAT=/bin/cat
-CUT=/usr/bin/cut
-EGREP=/bin/egrep
-TR=/usr/bin/tr
-SED=/bin/sed
-SUDO=/usr/bin/sudo
-FIND=/usr/bin/find
-VSERVER=/usr/sbin/vserver
+AWK_BIN=/usr/bin/awk
+CAT_BIN=/bin/cat
+CUT_BIN=/usr/bin/cut
+EGREP_BIN=/bin/egrep
+TR_BIN=/usr/bin/tr
+SED_BIN=/bin/sed
+SUDO_BIN=/usr/bin/sudo
+FIND_BIN=/usr/bin/find
+VSERVER_BIN=/usr/sbin/vserver
 
 VSERVERS_CONF=/etc/vservers
 VSERVERS_DATA=/vservers
@@ -34,51 +34,46 @@ FSTAB=fstab
 cd ${VSERVERS_CONF}
 
 # find the vservers from /etc/vservers
-vservers_list=$( ${FIND} . -maxdepth 1 -type d -not \
+vservers_list=$(${FIND_BIN} . -maxdepth 1 -type d -not \
 		  \( -name 'moved' -o -name 'removed' -o -name '.defaults' \
 		  -o -name '.distributions' -o -name '.' \) | \
-		  ${CUT} -d '/' -f 2 )
+		  ${CUT_BIN} -d '/' -f 2)
 
 missing_mounts=0
 exit_status=${E_OK}
 
 for vserver_name in $vservers_list; do
    # check the vservers mounts only for the running vservers
-   vserver_status=$( ${SUDO} ${VSERVER} $vserver_name status | \
-			${AWK} 'NR==1 { print $4 }' ) 
+   vserver_status=$(${SUDO_BIN} ${VSERVER_BIN} $vserver_name status | \
+		    ${AWK_BIN} 'NR==1 { print $4 }') 
 
-   [ "$vserver_status" != "running" ] && continue
+   test "$vserver_status" != "running" && continue
 
    # check if mtab and fstab are present
-   if [ ! -e ${VSERVERS_CONF}/${vserver_name}/${FSTAB} ]
-   then
-      echo "${VSERVERS_CONF}/${vserver_name}/${FSTAB} is missing!"
-      exit_status=${E_UNKN}
-   fi
-
-   if [ ! -e ${VSERVERS_DATA}/${vserver_name}/${MTAB} ]
-   then
-      echo "${VSERVERS_DATA}/${vserver_name}/${MTAB} is missing!"
-      exit_status=${E_UNKN}
-   fi
+   test ! -e ${VSERVERS_CONF}/${vserver_name}/${FSTAB} && \
+	 echo "${VSERVERS_CONF}/${vserver_name}/${FSTAB} is missing!" && \
+	 exit_status=${E_UNKN}
+   test ! -e ${VSERVERS_DATA}/${vserver_name}/${MTAB} && \
+	 echo "${VSERVERS_DATA}/${vserver_name}/${MTAB} is missing!" && \
+	 exit_status=${E_UNKN}
 
    # check for missing mounts in fstab
    while read fstab_line; do
 
-      # skip lines starting with a comment '#'
-      comment=$( echo $fstab_line | ${SED} -ne '/^#.*$/p' )
-      [ ! -z "$comment" ] && continue
+      # skip lines starting with a comment
+      comment=$(echo $fstab_line | ${SED_BIN} -ne '/^#.*$/p')
+      test ! -z "$comment" && continue
 
-      fstab_line=$( echo ${fstab_line} | ${TR} -s '[:blank:]' ' ' )
-      fstab_mount=$( echo ${fstab_line} | ${CUT} -d ' ' -f 2 )
+      fstab_line=$(echo ${fstab_line} | ${TR_BIN} -s '[:blank:]' ' ')
+      fstab_mount=$(echo ${fstab_line} | ${CUT_BIN} -d ' ' -f 2)
 
       flag=0
 
       # read every line from mtab file and compare it with
       # the lines from fstab
       while read mtab_line; do
-	 mtab_line=$( echo ${mtab_line} | ${TR} -s '[:blank:]' ' ' )
-	 mtab_mount=$( echo ${mtab_line} | ${CUT} -d ' ' -f 2 )
+	 mtab_line=$(echo ${mtab_line} | ${TR_BIN} -s '[:blank:]' ' ')
+	 mtab_mount=$(echo ${mtab_line} | ${CUT_BIN} -d ' ' -f 2)
 
 	 if [ "${fstab_mount}" = "${mtab_mount}" ]
 	 then
@@ -87,7 +82,7 @@ for vserver_name in $vservers_list; do
 	 fi
       done < ${VSERVERS_DATA}/${vserver_name}/${MTAB}
 
-      [ ! -z "$fstab_line" ] && \
+      test ! -z "$fstab_line" && \
 	 if [ $flag -eq 0 ]
 	 then
 	    let missing_mounts+=1
@@ -98,14 +93,13 @@ for vserver_name in $vservers_list; do
       done < ${VSERVERS_CONF}/${vserver_name}/${FSTAB}
 done
 
-[ ! -z "${mounts_info}" ] && \
+test ! -z "${mounts_info}" && \
    echo -e "Total mounts missing: ${missing_mounts}${mounts_info}"
 
-[ ${exit_status} -eq 0 ] && \
+test ${exit_status} -eq 0 && \
    echo "All mounts are OK" 
 
-[ ${exit_status} -eq ${E_UNKN} ] && \
+test ${exit_status} -eq ${E_UNKN} && \
    echo "Unknown error"
 
 exit ${exit_status}
-
